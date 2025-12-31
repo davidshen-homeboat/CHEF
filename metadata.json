@@ -1,0 +1,7 @@
+{
+  "name": "ChefOrder AI - Restaurant Inventory Assistant",
+  "description": "A smart order management tool for restaurant managers to parse messy LINE messages into structured inventory lists using Gemini AI. Extract items, quantities, and categories automatically.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
