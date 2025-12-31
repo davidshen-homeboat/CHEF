@@ -2,6 +2,8 @@
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 import { OrderItem } from "../types";
 
+declare var process: any;
+
 export const extractOrders = async (input: string | { data: string; mimeType: string }): Promise<OrderItem[]> => {
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   

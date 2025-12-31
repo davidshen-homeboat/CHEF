@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { OrderItem, CATEGORY_COLORS } from '../types';
+import { OrderItem, CATEGORY_COLORS, Category } from '../types';
 
 interface ConsolidatedViewProps {
   items: OrderItem[];
@@ -11,9 +11,9 @@ interface ConsolidatedItem {
   totalQuantity: number;
   avgPrice: number;
   unit: string;
-  category: string;
+  category: Category; // 修正：從 string 改為 Category
   count: number;
-  totalNetCost: number; // 改為未稅總額
+  totalNetCost: number;
 }
 
 const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
@@ -97,7 +97,6 @@ const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
 
   return (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      {/* Financial Summary Card */}
       <div className="bg-slate-900 text-white p-6 rounded-3xl shadow-xl">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
@@ -170,7 +169,7 @@ const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
                 <tr key={`${item.name}-${idx}`} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 font-bold text-slate-800">{item.name}</td>
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: `${CATEGORY_COLORS[item.category as any]}15`, color: CATEGORY_COLORS[item.category as any] }}>
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold" style={{ backgroundColor: `${CATEGORY_COLORS[item.category]}15`, color: CATEGORY_COLORS[item.category] }}>
                       {item.category}
                     </span>
                   </td>
