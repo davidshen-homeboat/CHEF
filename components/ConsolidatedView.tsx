@@ -11,15 +11,20 @@ interface ConsolidatedItem {
   totalQuantity: number;
   avgPrice: number;
   unit: string;
-  category: Category; // 修正：從 string 改為 Category
+  category: Category;
   count: number;
   totalNetCost: number;
 }
+
+type SortKey = 'name' | 'category' | 'totalNetCost' | 'totalQuantity';
+type SortOrder = 'asc' | 'desc';
 
 const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [sortKey, setSortKey] = useState<SortKey>('totalNetCost');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
 
   const filteredByDateItems = useMemo(() => {
     return items.filter(item => {
@@ -56,7 +61,7 @@ const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
       }
     });
 
-    return Array.from(map.values()).sort((a, b) => b.totalNetCost - a.totalNetCost);
+    return Array.from(map.values());
   }, [filteredByDateItems]);
 
   const financials = useMemo(() => {
@@ -66,16 +71,39 @@ const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
     return { net, tax, total };
   }, [consolidatedData]);
 
-  const filteredData = consolidatedData.filter(item => 
-    item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.category.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const sortedAndFilteredData = useMemo(() => {
+    let data = consolidatedData.filter(item => 
+      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    data.sort((a, b) => {
+      let result = 0;
+      if (sortKey === 'name') result = a.name.localeCompare(b.name, 'zh-TW');
+      else if (sortKey === 'category') result = a.category.localeCompare(b.category, 'zh-TW');
+      else if (sortKey === 'totalNetCost') result = a.totalNetCost - b.totalNetCost;
+      else if (sortKey === 'totalQuantity') result = a.totalQuantity - b.totalQuantity;
+      
+      return sortOrder === 'asc' ? result : -result;
+    });
+
+    return data;
+  }, [consolidatedData, searchTerm, sortKey, sortOrder]);
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortKey(key);
+      setSortOrder('desc'); // 數值類通常切換時先從大的開始
+    }
+  };
 
   const handleExport = () => {
-    if (filteredData.length === 0) return;
+    if (sortedAndFilteredData.length === 0) return;
     
     let csvContent = "\uFEFF類別,品項,總數量,單位,平均單價(未稅),總計(未稅),稅額(5%),含稅總計,來源筆數\n";
-    filteredData.forEach(item => {
+    sortedAndFilteredData.forEach(item => {
       const itemTax = item.totalNetCost * 0.05;
       csvContent += `${item.category},${item.name},${item.totalQuantity},${item.unit},${item.avgPrice.toFixed(1)},${item.totalNetCost.toFixed(0)},${itemTax.toFixed(0)},${(item.totalNetCost + itemTax).toFixed(0)},${item.count}\n`;
     });
@@ -93,6 +121,13 @@ const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const SortIcon = ({ k }: { k: SortKey }) => {
+    if (sortKey !== k) return <svg className="w-3 h-3 text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" /></svg>;
+    return sortOrder === 'asc' 
+      ? <svg className="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 15l7-7 7 7" /></svg>
+      : <svg className="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M19 9l-7 7-7-7" /></svg>;
   };
 
   return (
@@ -157,15 +192,43 @@ const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
           <table className="w-full text-left border-collapse min-w-[600px]">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">採購品項</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">類別</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">總數量</th>
-                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">小計 (未稅)</th>
+                <th 
+                  onClick={() => toggleSort('name')}
+                  className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    採購品項 <SortIcon k="name" />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => toggleSort('category')}
+                  className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    類別 <SortIcon k="category" />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => toggleSort('totalQuantity')}
+                  className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider cursor-pointer hover:bg-slate-100 transition-colors group"
+                >
+                  <div className="flex items-center gap-1.5">
+                    總數量 <SortIcon k="totalQuantity" />
+                  </div>
+                </th>
+                <th 
+                  onClick={() => toggleSort('totalNetCost')}
+                  className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right cursor-pointer hover:bg-slate-100 transition-colors group"
+                >
+                  <div className="flex justify-end items-center gap-1.5">
+                    小計 (未稅) <SortIcon k="totalNetCost" />
+                  </div>
+                </th>
                 <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider text-right">含稅 (5%)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {filteredData.map((item, idx) => (
+              {sortedAndFilteredData.map((item, idx) => (
                 <tr key={`${item.name}-${idx}`} className="hover:bg-slate-50 transition-colors">
                   <td className="px-6 py-4 font-bold text-slate-800">{item.name}</td>
                   <td className="px-6 py-4">
@@ -187,7 +250,7 @@ const ConsolidatedView: React.FC<ConsolidatedViewProps> = ({ items }) => {
                   </td>
                 </tr>
               ))}
-              {filteredData.length === 0 && (
+              {sortedAndFilteredData.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-6 py-12 text-center text-slate-400 text-sm">此區間內無數據</td>
                 </tr>
