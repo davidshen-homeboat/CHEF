@@ -6,22 +6,27 @@ export const extractOrders = async (input: string | { data: string; mimeType: st
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const systemInstruction = `
-    你是一位精通繁體中文的餐廳採購與財務稽核專家。
-    你的任務是精確地從「出貨單照片」、「送貨單照片」或「手寫叫貨清單」中提取數據。
-    
-    分析指南：
-    1. **表格導向**：出貨單通常是表格形式。請準確對齊「品項/名稱」、「數量」與「單位」。
-    2. **手寫辨識**：針對台灣市場常見的手寫字（如：斤、箱、捆、粒）進行精準辨識。
-    3. **智慧修正**：若字跡模糊，請根據上下文修正（例如：將「空心萊」修正為「空心菜」）。
-    4. **排除雜項**：忽略單價、總額、稅金、廠商電話、日期、印章雜色等非品項統計資訊。
-    5. **標準化分類**：將品項歸類為：蔬菜、肉類、海鮮、乾貨、調料、其他。
-    
+    你是一位精通餐廳採購與財務管理的專業主廚。
+    你的任務是精確地從「單據照片」或「LINE對話」中提取叫貨品項、數量、單位以及【價格】。
+
+    提取規則：
+    1. **品項名稱**: 食材或物品名稱。
+    2. **數量與單位**: 必須分開提取。
+    3. **價格 (price)**: 如果單據上有寫單價或總價，請提取數值。若無，請填寫 "0"。
+    4. **分類**: 
+       - 生鮮類: 蔬菜、肉、海鮮。
+       - 冷凍類: 冷凍食品。
+       - 乾貨類: 米麵粉乾料。
+       - 調料類: 醬油油鹽醬。
+       - 消耗品: 包材清潔用品。
+
     輸出的 JSON 格式必須是一個陣列：
-    - name: 品項名稱 (String)
-    - quantity: 數量 (String/Number)
-    - unit: 單位 (String, 如：斤, 盒, 支)
-    - category: 分類 (必須是：蔬菜, 肉類, 海鮮, 乾貨, 調料, 其他)
-    - rawText: 原始在單據上看到的文字內容
+    - name: String
+    - quantity: String
+    - unit: String
+    - price: String (僅填寫數字)
+    - category: 分類名稱
+    - rawText: 原始文字
   `;
 
   const responseSchema = {
@@ -32,13 +37,11 @@ export const extractOrders = async (input: string | { data: string; mimeType: st
         name: { type: Type.STRING },
         quantity: { type: Type.STRING },
         unit: { type: Type.STRING },
-        category: { 
-          type: Type.STRING,
-          description: "分類：蔬菜, 肉類, 海鮮, 乾貨, 調料, 其他"
-        },
+        price: { type: Type.STRING },
+        category: { type: Type.STRING },
         rawText: { type: Type.STRING }
       },
-      required: ["name", "quantity", "unit", "category", "rawText"]
+      required: ["name", "quantity", "unit", "price", "category", "rawText"]
     }
   };
 
@@ -50,13 +53,8 @@ export const extractOrders = async (input: string | { data: string; mimeType: st
   } else {
     contents = {
       parts: [
-        { 
-          inlineData: {
-            data: input.data,
-            mimeType: input.mimeType
-          } 
-        },
-        { text: "這是一張餐廳的出貨單照片。請幫我掃描並列出裡面所有的食材品項、數量與單位。請注意表格結構，不要跳行或漏掉品項。" }
+        { inlineData: { data: input.data, mimeType: input.mimeType || "image/jpeg" } },
+        { text: "這是一張叫貨單或收據。請辨識所有品項、數量、單位、以及【單價或金額】並進行分類。" }
       ]
     };
   }
@@ -76,7 +74,8 @@ export const extractOrders = async (input: string | { data: string; mimeType: st
     const parsed = JSON.parse(text);
     return parsed.map((item: any, index: number) => ({
       ...item,
-      id: `item-${Date.now()}-${index}`
+      id: `item-${Date.now()}-${index}`,
+      orderDate: "" 
     }));
   } catch (error) {
     console.error("Gemini Extraction Error:", error);

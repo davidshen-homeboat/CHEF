@@ -4,8 +4,10 @@ export interface OrderItem {
   name: string;
   quantity: string;
   unit: string;
-  category: '蔬菜' | '肉類' | '海鮮' | '乾貨' | '調料' | '其他';
+  price: string; // 新增：單價
+  category: '生鮮類' | '冷凍類' | '乾貨類' | '調料類' | '消耗品';
   rawText: string;
+  orderDate: string; // YYYY-MM-DD
 }
 
 export interface ExtractionResult {
@@ -17,10 +19,9 @@ export interface ExtractionResult {
 export type Category = OrderItem['category'];
 
 export const CATEGORY_COLORS: Record<Category, string> = {
-  '蔬菜': '#22c55e',
-  '肉類': '#ef4444',
-  '海鮮': '#3b82f6',
-  '乾貨': '#f59e0b',
-  '調料': '#8b5cf6',
-  '其他': '#64748b'
+  '生鮮類': '#10b981', 
+  '冷凍類': '#06b6d4', 
+  '乾貨類': '#f59e0b', 
+  '調料類': '#8b5cf6', 
+  '消耗品': '#64748b'  
 };
