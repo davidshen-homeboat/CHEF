@@ -10,15 +10,21 @@ const StatsCards: React.FC<StatsCardsProps> = ({ items }) => {
   const totalEntries = items.length;
   
   const nameCounts = items.reduce((acc, curr) => {
-    acc[curr.name] = (acc[curr.name] || 0) + 1;
+    if (curr.name) {
+      acc[curr.name] = (acc[curr.name] || 0) + 1;
+    }
     return acc;
   }, {} as Record<string, number>);
   
   const duplicateCount = (Object.values(nameCounts) as number[]).filter(c => c > 1).length;
 
   const netCost = items.reduce((sum, item) => {
-    const qty = parseFloat(item.quantity.replace(/[^\d.]/g, '')) || 0;
-    const price = parseFloat(item.price.replace(/[^\d.]/g, '')) || 0;
+    // 加入空值保護：確保 quantity 和 price 轉為字串後再進行處理
+    const qtyStr = (item.quantity ?? "").toString();
+    const priceStr = (item.price ?? "").toString();
+    
+    const qty = parseFloat(qtyStr.replace(/[^\d.]/g, '')) || 0;
+    const price = parseFloat(priceStr.replace(/[^\d.]/g, '')) || 0;
     return sum + (qty * price);
   }, 0);
 

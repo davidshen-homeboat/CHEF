@@ -9,34 +9,31 @@ interface ProcessingItem {
 }
 
 interface InputSectionProps {
-  onProcessText: (text: string, date: string) => void;
-  onProcessImage: (data: string, mimeType: string, date: string) => Promise<void>;
+  onProcessText: (text: string, date: string, vendor: string) => void;
+  onProcessImage: (data: string, mimeType: string, date: string, vendor: string) => Promise<void>;
   isLoading: boolean;
+  existingVendors: string[];
 }
 
-type InputMode = 'file' | 'url' | 'text';
+type InputMode = 'file' | 'text';
 
-const InputSection: React.FC<InputSectionProps> = ({ onProcessText, onProcessImage, isLoading }) => {
+const InputSection: React.FC<InputSectionProps> = ({ onProcessText, onProcessImage, isLoading, existingVendors }) => {
   const [mode, setMode] = useState<InputMode>('file');
   const [inputText, setInputText] = useState('');
-  const [inputUrl, setInputUrl] = useState('');
+  const [vendorName, setVendorName] = useState('');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isFetchingUrl, setIsFetchingUrl] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [queue, setQueue] = useState<ProcessingItem[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 處理 Ctrl+V 貼上圖片
   useEffect(() => {
     const handlePaste = async (event: ClipboardEvent) => {
       const items = event.clipboardData?.items;
       if (!items) return;
-
       const imageItems = Array.from(items).filter(item => item.type.startsWith('image/'));
       if (imageItems.length === 0) return;
 
       setMode('file');
-      
       const newItems: ProcessingItem[] = [];
       const files: File[] = [];
 
@@ -51,7 +48,6 @@ const InputSection: React.FC<InputSectionProps> = ({ onProcessText, onProcessIma
       }
 
       setQueue(prev => [...prev, ...newItems]);
-      
       for (let i = 0; i < files.length; i++) {
         await handleSingleFileProcess(newItems[i], files[i]);
       }
@@ -59,27 +55,36 @@ const InputSection: React.FC<InputSectionProps> = ({ onProcessText, onProcessIma
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [selectedDate]); // 當日期改變時重新綁定
+  }, [selectedDate, vendorName]); 
 
   const handleSingleFileProcess = async (queueItem: ProcessingItem, file: File) => {
     setQueue(prev => prev.map(q => q.id === queueItem.id ? { ...q, status: 'processing' } : q));
     try {
       const reader = new FileReader();
-      const dataPromise = new Promise<string>((resolve) => {
-        reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+      const dataPromise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          if (result && result.includes(',')) {
+            resolve(result.split(',')[1]);
+          } else {
+            reject(new Error("無法讀取圖片資料"));
+          }
+        };
+        reader.onerror = () => reject(new Error("讀取檔案失敗"));
         reader.readAsDataURL(file);
       });
       const base64Data = await dataPromise;
-      await onProcessImage(base64Data, file.type || 'image/jpeg', selectedDate);
+      await onProcessImage(base64Data, file.type || 'image/jpeg', selectedDate, vendorName);
       setQueue(prev => prev.map(q => q.id === queueItem.id ? { ...q, status: 'done' } : q));
     } catch (err) {
+      console.error("Processing error:", err);
       setQueue(prev => prev.map(q => q.id === queueItem.id ? { ...q, status: 'error' } : q));
     }
   };
 
   const handleTextSubmit = () => {
     if (!inputText.trim()) return;
-    onProcessText(inputText, selectedDate);
+    onProcessText(inputText, selectedDate, vendorName);
     setInputText('');
   };
 
@@ -126,42 +131,42 @@ const InputSection: React.FC<InputSectionProps> = ({ onProcessText, onProcessIma
     }
   };
 
-  const handleUrlSubmit = async () => {
-    if (!inputUrl.trim()) return;
-    setIsFetchingUrl(true);
-    try {
-      const response = await fetch(inputUrl);
-      const blob = await response.blob();
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(',')[1];
-        await onProcessImage(base64, blob.type || 'image/jpeg', selectedDate);
-        setIsFetchingUrl(false);
-        setInputUrl('');
-      };
-      reader.readAsDataURL(blob);
-    } catch (err) {
-      alert('無法讀取圖片連結');
-      setIsFetchingUrl(false);
-    }
-  };
-
   return (
     <div className="space-y-4">
-      {/* Date Selection Bar */}
-      <div className="bg-emerald-600 p-3 rounded-2xl shadow-lg shadow-emerald-100 flex items-center justify-between text-white">
-        <div className="flex items-center gap-3 ml-2">
-          <svg className="w-5 h-5 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <span className="text-sm font-bold">叫貨日期設定</span>
+      {/* 叫貨設定 Bar: 日期與廠商 */}
+      <div className="bg-emerald-600 p-4 rounded-2xl shadow-lg shadow-emerald-100 space-y-3">
+        <div className="flex items-center gap-2 text-white">
+          <svg className="w-4 h-4 text-emerald-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m10 0a2 2 0 100-4m0 4a2 2 0 110-4m-4 12a2 2 0 100-4m0 4a2 2 0 110-4M6 20v-2m12 2v-2m-6-2V8" /></svg>
+          <span className="text-xs font-bold uppercase tracking-wider">叫貨基礎設定</span>
         </div>
-        <input 
-          type="date" 
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="bg-emerald-700 text-white text-sm font-bold px-3 py-1.5 rounded-xl border border-emerald-500 outline-none focus:ring-2 focus:ring-emerald-300"
-        />
+        
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-emerald-100 uppercase ml-1">叫貨日期</label>
+            <input 
+              type="date" 
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="bg-emerald-700/50 text-white text-sm font-bold px-3 py-2 rounded-xl border border-emerald-500/50 outline-none focus:ring-2 focus:ring-emerald-300 w-full"
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-bold text-emerald-100 uppercase ml-1">廠商名稱 (可選)</label>
+            <div className="relative">
+              <input 
+                list="vendor-options"
+                type="text" 
+                placeholder="輸入或選擇廠商..."
+                value={vendorName}
+                onChange={(e) => setVendorName(e.target.value)}
+                className="bg-emerald-700/50 text-white text-sm font-bold px-3 py-2 rounded-xl border border-emerald-500/50 outline-none focus:ring-2 focus:ring-emerald-300 w-full placeholder:text-emerald-300/50"
+              />
+              <datalist id="vendor-options">
+                {existingVendors.map(v => <option key={v} value={v} />)}
+              </datalist>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div 
@@ -226,7 +231,7 @@ const InputSection: React.FC<InputSectionProps> = ({ onProcessText, onProcessIma
                   disabled={isLoading || !inputText.trim()}
                   className="w-full bg-slate-800 hover:bg-black disabled:bg-slate-200 text-white font-bold py-3.5 rounded-2xl transition-all text-sm"
                 >
-                  匯入為 {selectedDate} 叫貨單
+                  匯入為 {selectedDate} ({vendorName || '未指定廠商'})
                 </button>
               </div>
             )}

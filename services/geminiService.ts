@@ -8,24 +8,18 @@ export const extractOrders = async (input: string | { data: string; mimeType: st
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   
   const systemInstruction = `
-    你是一位精通餐廳採購與財務管理的專業主廚。
-    你的任務是精確地從「單據照片」、「手寫清單」或「LINE對話」中提取叫貨品項、數量、單位以及單價。
-
-    提取規則：
-    1. **品項名稱**: 準確提取食材或物品名稱（如：大白菜、去骨雞腿）。
-    2. **數量與單位**: 必須分開提取（如：數量 "10", 單位 "公斤"）。
-    3. **價格 (price)**: 
-       - 提取單價或總價。只保留數字，不要加符號。
-       - 如果圖片模糊或沒寫價格，請填寫 "0"，不可留空。
-    4. **分類限制 (嚴格遵守)**: 
+    你是一位專業的餐廳營運分析師與主廚。你的任務是從提供的資料中精確提取叫貨明細。
+    
+    提取原則：
+    1. **品項識別**: 包含廚房食材與前台耗材（如外帶碗、餐巾紙、吸管、清潔劑）。
+    2. **品項名稱**: 提取完整名稱（例：'750ml 外帶圓碗'、'三層抽取式面紙'）。
+    3. **數量與單位**: 嚴格拆分（例：數量 '5', 單位 '箱'）。
+    4. **價格 (price)**: 只輸出純數字字串。
+    5. **分類 (Enum 嚴格執行)**: 
        - 必須歸類為以下之一：'生鮮類', '冷凍類', '乾貨類', '調料類', '消耗品'。
-       - 生鮮類: 包含所有新鮮蔬菜、肉類、水果、海鮮。
-       - 冷凍類: 包含所有加工冷凍品、冷凍肉品。
-       - 乾貨類: 米、麵、豆類、乾粉類。
-       - 調料類: 油、鹽、醬、醋、香料。
-       - 消耗品: 紙巾、洗潔精、包裝盒。
+       - 消耗品: 特別注意包含所有前台用品、外帶包材（碗、蓋、袋）、餐巾紙、洗碗精、垃圾袋等非食材類別。
 
-    輸出格式：嚴格返回 JSON 格式的陣列。
+    輸出格式：返回標準 JSON 陣列。
   `;
 
   const responseSchema = {
@@ -34,31 +28,30 @@ export const extractOrders = async (input: string | { data: string; mimeType: st
       type: Type.OBJECT,
       properties: {
         name: { type: Type.STRING, description: "品項名稱" },
-        quantity: { type: Type.STRING, description: "數量數字" },
+        quantity: { type: Type.STRING, description: "數量" },
         unit: { type: Type.STRING, description: "單位" },
-        price: { type: Type.STRING, description: "單價或總額（僅數字）" },
+        price: { type: Type.STRING, description: "單價或估價" },
         category: { 
           type: Type.STRING, 
           enum: ['生鮮類', '冷凍類', '乾貨類', '調料類', '消耗品'],
-          description: "分類"
+          description: "分類標籤"
         },
-        rawText: { type: Type.STRING, description: "原始參考文字" }
+        rawText: { type: Type.STRING, description: "來源文本段落" }
       },
       required: ["name", "quantity", "unit", "price", "category", "rawText"]
     }
   };
 
-  const model = "gemini-3-flash-preview";
+  const model = "gemini-3-pro-preview";
   let contents;
 
   if (typeof input === 'string') {
     contents = input;
   } else {
-    // 確保圖片辨識時的 Prompt 足夠強大
     contents = {
       parts: [
         { inlineData: { data: input.data, mimeType: input.mimeType || "image/jpeg" } },
-        { text: "請仔細辨識這張照片中的所有採購品項。如果單據上有金額請務必提取，若無則標記為 0。請根據品項性質正確分類。" }
+        { text: "這是一張叫貨單，包含食材與消耗品。請整理出品項、數量、金額。請確保分類正確。" }
       ]
     };
   }
@@ -70,7 +63,8 @@ export const extractOrders = async (input: string | { data: string; mimeType: st
       config: {
         systemInstruction,
         responseMimeType: "application/json",
-        responseSchema
+        responseSchema,
+        thinkingConfig: { thinkingBudget: 2048 } 
       }
     });
 
